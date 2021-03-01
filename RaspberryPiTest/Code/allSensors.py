@@ -2,7 +2,6 @@
 
 import Adafruit_DHT
 
-import picamera
 from time import sleep
 import time
 
@@ -58,35 +57,43 @@ gps = adafruit_gps.GPS(uart, debug=False)
 
 # Turn on the basic GGA and RMC info (what you typically want)
 gps.send_command(b"PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0")
-# Turn on just minimum info (RMC only, location):
-# gps.send_command(b'PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0')
-# Turn off everything:
-# gps.send_command(b'PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0')
-# Turn on everything (not all of it is parsed!)
-# gps.send_command(b'PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0')
-
-# Set update rate to once a second (1hz) which is what you typically want.
 gps.send_command(b"PMTK220,1000")
-# Or decrease to once every two seconds by doubling the millisecond value.
-# Be sure to also increase your UART timeout above!
-# gps.send_command(b'PMTK220,2000')
-# You can also speed up the rate, but don't go too fast or else you can lose
-# data during parsing.  This would be twice a second (2hz, 500ms delay):
-# gps.send_command(b'PMTK220,500')
-
 last_print = time.monotonic()
+
 t0 = time.time()
+firstTime = True;
+# Run program for one hour
 while time.time()-t0<3600:
+     #Get Time, Battery and Accelerometer Values
      bus = smbus.SMBus(1) 
      now = datetime.datetime.now()
-     with open('TempAndHum_data.csv', mode='a') as csv_file:
-                fieldnames = ['Date and Time','Temp','Hum','BattPer']
+     ax,ay,az= mpu6050_conv()
+     with open('AllSensors_data.csv', mode='a') as csv_file:
+                fieldnames = ['Date and Time','Temp','Hum','Ax', 'Ay', 'Az','Lat','Long','FixQua','Sate','Alti','Speed','TrAng','HD','HDID','BattPer']
                 writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-                if flag==0:
+                if firstTime == True:
+                    humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+                    gps.update()
                     writer.writeheader()
-                    flag+=1
-                else:
                     writer.writerow({'Date and Time': now.strftime("%Y-%m-%d %H:%M:%S") ,'Temp': str("{0:0.1f}*C".format(temperature)),
-                    'Hum': str("Humidity={1:0.1f}%".format(humidity)),'BattPer': str("Battery:%i%%" % readCapacity(bus))})
+                    'Hum': str("{:.1f}%".format(humidity)),'Ax': str(ax), 'Ay': str(ay), 'Az': str(az),
+                    'Lat': str("{0:.6f}".format(gps.latitude)),'Long': str("{0:.6f}".format(gps.longitude)),
+                    'FixQua': str(gps.fix_quality),'Sate': str(gps.satellites),'Sate': str(gps.satellites),'Alti': str(gps.altitude_m),
+                    'Speed': str(gps.speed_knots),'TrAng': str(gps.track_angle_deg),'HD': str(gps.horizontal_dilution),'HDID': str(gps.height_geoid),'BattPer': str("%i%%" % readCapacity(bus))})
+                    firstTime = False
+                else:
+                    if time.time()-t0 % 300 == 0:
+                        # Check GPS and Humidity every 5 min = 300 sec
+                        humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+                        gps.update()
+                        writer.writerow({'Date and Time': now.strftime("%Y-%m-%d %H:%M:%S") ,'Temp': str("{0:0.1f}*C".format(temperature)),
+                        'Hum': str("{:.1f}%".format(humidity)),'Ax': str(ax), 'Ay': str(ay), 'Az': str(az),
+                        'Lat': str("{0:.6f}".format(gps.latitude)),'Long': str("{0:.6f}".format(gps.longitude)),
+                        'FixQua': str(gps.fix_quality),'Sate': str(gps.satellites),'Sate': str(gps.satellites),'Alti': str(gps.altitude_m),
+                        'Speed': str(gps.speed_knots),'TrAng': str(gps.track_angle_deg),'HD': str(gps.horizontal_dilution),'HDID': str(gps.height_geoid),'BattPer': str("%i%%" % readCapacity(bus))})
+                    else:
+                        # Check Accelerometer 10 time per second
+                        writer.writerow({'Date and Time': now.strftime("%Y-%m-%d %H:%M:%S") ,'Ax': str(ax), 'Ay': str(ay), 'Az': str(az),'BattPer': str("%i%%" % readCapacity(bus))})
+    
                     print("Done")
-     time.sleep(1)
+     time.sleep(0.1)
