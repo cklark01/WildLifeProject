@@ -1,1 +1,1 @@
-# WildLifeProject
+# WildEye Smart System Project
